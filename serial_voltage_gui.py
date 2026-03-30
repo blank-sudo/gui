@@ -39,7 +39,6 @@ class SerialVoltageApp:
         self.stopbits_var = tk.StringVar(value="1")
         self.parity_var = tk.StringVar(value="None")
         self.flow_var = tk.StringVar(value="None")
-        self.eol_var = tk.StringVar(value="CR")  # 设备常见命令结束符：CR
 
         # 标定参数：monitor = intercept + slope * value
         self.slope_var = tk.DoubleVar(value=-0.000303)
@@ -87,15 +86,6 @@ class SerialVoltageApp:
 
         ttk.Label(serial_frame, text="Flow").grid(row=1, column=6, **pad)
         ttk.Combobox(serial_frame, textvariable=self.flow_var, values=["None", "RTS/CTS", "XON/XOFF"], width=10).grid(row=1, column=7, **pad)
-
-        ttk.Label(serial_frame, text="命令结束符").grid(row=0, column=8, **pad)
-        ttk.Combobox(
-            serial_frame,
-            textvariable=self.eol_var,
-            values=["CR", "LF", "CRLF", "None"],
-            width=8,
-            state="readonly",
-        ).grid(row=0, column=9, **pad)
 
         ttk.Button(serial_frame, text="连接", command=self.connect_serial).grid(row=0, column=6, **pad)
         ttk.Button(serial_frame, text="断开", command=self.disconnect_serial).grid(row=0, column=7, **pad)
@@ -154,9 +144,9 @@ class SerialVoltageApp:
         if self.chart_enabled:
             self.figure = Figure(figsize=(6.2, 4.4), dpi=100)
             self.ax = self.figure.add_subplot(111)
-            self.line_target, = self.ax.plot([], [], label="目标Vout", linewidth=1.8)
-            self.line_fit, = self.ax.plot([], [], label="拟合Vout", linewidth=1.6)
-            self.line_monitor, = self.ax.plot([], [], label="实测monitor", linewidth=1.2)
+            self.line_target, = self.ax.plot([], [], label="目标输出电压 Vout_target (V)", linewidth=1.8)
+            self.line_fit, = self.ax.plot([], [], label="拟合输出电压 Vout_fit (V)", linewidth=1.6)
+            self.line_monitor, = self.ax.plot([], [], label="监测电压 monitor (V)", linewidth=1.2)
             self.ax.set_xlabel("时间(s)")
             self.ax.set_ylabel("电压(V)")
             self.ax.grid(True, alpha=0.25)
@@ -327,16 +317,10 @@ class SerialVoltageApp:
             messagebox.showwarning("未连接", "请先连接串口")
             return
         try:
-            eol_map = {
-                "CR": "\r",
-                "LF": "\n",
-                "CRLF": "\r\n",
-                "None": "",
-            }
-            eol = eol_map.get(self.eol_var.get(), "\r")
-            wire = (cmd.strip() + eol).encode("ascii")
+            # 设备已确认使用 CR 作为命令结束符
+            wire = (cmd.strip() + "\r").encode("ascii")
             self.ser.write(wire)
-            self.log(f"-> {cmd} [EOL={self.eol_var.get()}]")
+            self.log(f"-> {cmd} [EOL=CR]")
             if expect_reply:
                 self.ser.flush()
         except Exception as e:

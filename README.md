@@ -114,11 +114,5 @@ pyinstaller --noconfirm --windowed --name SerialVoltageGUI serial_voltage_gui.py
 ## 收到 `CMD_NOT_DEFINED`（命令格式可能不匹配）
 如果日志里出现类似：`enable=1Command error CMD_NOT_DEFINED`，通常是命令结束符不匹配。
 
-本工具已支持可选命令结束符（界面里“命令结束符”）：
-- `CR`（`\\r`）- 许多下位机最常见，建议优先尝试
-- `LF`（`\\n`）
-- `CRLF`（`\\r\\n`）
-- `None`（不追加结束符）
-
-建议测试顺序：`CR` -> `LF` -> `CRLF`。  
-你原来在 PuTTY 能正常工作时，通常是用了 `CR` 或 `CRLF`。
+本工具当前固定使用 `CR`（`\\r`）作为命令结束符（与你下位机一致）。  
+若后续更换设备需要 `LF` 或 `CRLF`，可再按新协议调整。
