@@ -97,3 +97,23 @@ pyinstaller --noconfirm --windowed --name SerialVoltageGUI serial_voltage_gui.py
    ```bat
    build_exe.bat
    ```
+
+## 串口连接报错：`WinError 121 / 信号灯超时时间已到`
+如果弹窗出现类似：
+
+`could not open port 'COM3': OSError(22, '信号灯超时时间已到', None, 121)`
+
+可按以下顺序排查：
+1. 关闭其他占用串口的软件（PuTTY、串口助手、Arduino 串口监视器等）。
+2. 拔插 USB 转串口线，等待 3 秒，再点“刷新端口”。
+3. 在设备管理器确认端口号是否变化（COM3 可能变成 COM4/COM5）。
+4. 更换 USB 口（尽量直连主板）或更换数据线。
+5. 避免通过无源 HUB，可能供电不足导致超时。
+6. 以管理员身份运行 EXE 后重试。
+
+## 收到 `CMD_NOT_DEFINED`（命令格式可能不匹配）
+如果日志里出现类似：`enable=1Command error CMD_NOT_DEFINED`，通常是命令结束符不匹配。
+
+本工具支持可选结束符（界面“结束符”）：`CR` / `LF` / `CRLF` / `None`。  
+建议按顺序测试：`CRLF` -> `CR` -> `LF`。  
+（不少设备在 PuTTY 可用时，实际是 `CRLF`）
