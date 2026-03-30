@@ -144,9 +144,9 @@ class SerialVoltageApp:
         if self.chart_enabled:
             self.figure = Figure(figsize=(6.2, 4.4), dpi=100)
             self.ax = self.figure.add_subplot(111)
-            self.line_target, = self.ax.plot([], [], label="目标Vout", linewidth=1.8)
-            self.line_fit, = self.ax.plot([], [], label="拟合Vout", linewidth=1.6)
-            self.line_monitor, = self.ax.plot([], [], label="实测monitor", linewidth=1.2)
+            self.line_target, = self.ax.plot([], [], label="目标输出电压 Vout_target (V)", linewidth=1.8)
+            self.line_fit, = self.ax.plot([], [], label="拟合输出电压 Vout_fit (V)", linewidth=1.6)
+            self.line_monitor, = self.ax.plot([], [], label="监测电压 monitor (V)", linewidth=1.2)
             self.ax.set_xlabel("时间(s)")
             self.ax.set_ylabel("电压(V)")
             self.ax.grid(True, alpha=0.25)
@@ -214,9 +214,51 @@ class SerialVoltageApp:
             self.stop_read.clear()
             self.read_thread = threading.Thread(target=self._reader_loop, daemon=True)
             self.read_thread.start()
+            return
+        except Exception as first_error:
+            # Windows 某些 USB 串口会偶发 WinError 121，短暂重试一次
+            self.log(f"首次连接失败，准备重试: {first_error}")
+            time.sleep(0.3)
+
+        try:
+            self.ser = serial.Serial(**self._serial_params())
+            self.log(f"重试连接成功: {self.ser.port}, {self.ser.baudrate} bps")
+            self.stop_read.clear()
+            self.read_thread = threading.Thread(target=self._reader_loop, daemon=True)
+            self.read_thread.start()
         except Exception as e:
-            messagebox.showerror("连接失败", str(e))
-            self.log(f"连接失败: {e}")
+            msg = self._format_connect_error(e)
+            messagebox.showerror("连接失败", msg)
+            self.log(f"连接失败: {msg}")
+
+    def _format_connect_error(self, err: Exception) -> str:
+        text = str(err)
+        low = text.lower()
+        port = self.port_var.get()
+
+        if "121" in low or "信号灯超时时间已到" in text:
+            return (
+                f"{text}\n\n"
+                f"排查建议（{port}）：\n"
+                "1) 关闭 PuTTY/串口助手/Arduino Serial Monitor 等占用串口的软件。\n"
+                "2) 拔插 USB 转串口线，等待 3 秒后点“刷新端口”再连接。\n"
+                "3) 打开设备管理器确认端口号是否变化（可能从 COM3 变为 COM4/COM5）。\n"
+                "4) 更换 USB 口（优先主板后置口）或更换数据线。\n"
+                "5) 若是 USB 集线器供电不足，请改直连电脑。\n"
+            )
+        if "access is denied" in low or "权限" in text:
+            return (
+                f"{text}\n\n"
+                "串口被占用或权限不足：\n"
+                "1) 关闭其他串口程序。\n"
+                "2) 以管理员身份运行本程序后重试。"
+            )
+        if "file not found" in low or "找不到" in text:
+            return (
+                f"{text}\n\n"
+                f"未找到端口 {port}，请先点击“刷新端口”并重新选择正确 COM 号。"
+            )
+        return text
 
     def disconnect_serial(self) -> None:
         self.stop_read.set()
@@ -228,11 +270,17 @@ class SerialVoltageApp:
             self.log("串口已断开。")
 
     def _reader_loop(self) -> None:
+        rx_buffer = ""
         while not self.stop_read.is_set() and self.ser and self.ser.is_open:
             try:
-                line = self.ser.readline()
-                if line:
-                    text = line.decode(errors="ignore").strip()
+                chunk = self.ser.read(self.ser.in_waiting or 1)
+                if not chunk:
+                    continue
+                rx_buffer += chunk.decode(errors="ignore")
+                parts = re.split(r"[\r\n]+", rx_buffer)
+                rx_buffer = parts[-1]
+                for text in parts[:-1]:
+                    text = text.strip()
                     if text:
                         self.root.after(0, self.log, f"<- {text}")
                         self.root.after(0, self._append_monitor_from_line, text)
@@ -269,9 +317,10 @@ class SerialVoltageApp:
             messagebox.showwarning("未连接", "请先连接串口")
             return
         try:
-            wire = (cmd.strip() + "\r\n").encode("ascii")
+            # 设备已确认使用 CR 作为命令结束符
+            wire = (cmd.strip() + "\r").encode("ascii")
             self.ser.write(wire)
-            self.log(f"-> {cmd}")
+            self.log(f"-> {cmd} [EOL=CR]")
             if expect_reply:
                 self.ser.flush()
         except Exception as e:
